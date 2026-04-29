@@ -295,8 +295,8 @@ const App: React.FC = () => {
         }
     } catch (e) {}
 
-    // Force a full reload to the specified login page for maximum reliability
-    window.location.href = 'https://spendusjaya.netlify.app/'; 
+    // Ensure state updates take effect, or force reload from origin
+    window.location.href = window.location.origin; 
   };
 
   const handleStartExam = async (exam: Exam) => {

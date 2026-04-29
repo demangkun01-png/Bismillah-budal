@@ -3844,7 +3844,7 @@ ANS: B`;
                                   <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer hover:text-blue-600 transition">
                                       <input 
                                           type="checkbox" 
-                                          checked={viewingQuestionsExam.shuffleQuestions} 
+                                          checked={viewingQuestionsExam.shuffleQuestions || false} 
                                           onChange={(e) => handleToggleShuffle('shuffleQuestions', e.target.checked)}
                                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                       />
@@ -3853,7 +3853,7 @@ ANS: B`;
                                   <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer hover:text-blue-600 transition">
                                       <input 
                                           type="checkbox" 
-                                          checked={viewingQuestionsExam.shuffleOptions} 
+                                          checked={viewingQuestionsExam.shuffleOptions || false} 
                                           onChange={(e) => handleToggleShuffle('shuffleOptions', e.target.checked)}
                                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                       />
