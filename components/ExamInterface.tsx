@@ -408,6 +408,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   }, [isFrozen, freezeTimeLeft]);
 
   const handleFinalSubmitRef = useRef<any>(null);
+  const initialViewport = useRef({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
       handleFinalSubmitRef.current = handleFinalSubmit;
@@ -452,15 +453,54 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
             // Optional: try to force them back, but it must be user-initiated usually.
         }
     };
+    
+    let resizeTimer: any = null;
+    const handleResize = () => {
+        // debounce resize to prevent firing too quickly
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            const currentWidth = window.innerWidth;
+            const currentHeight = window.innerHeight;
+            
+            // Check for rotation
+            const isPortraitToLandscape = Math.abs(currentWidth - initialViewport.current.height) < 150;
+            const isLandscapeToPortrait = Math.abs(currentHeight - initialViewport.current.width) < 150;
+            const isRotation = isPortraitToLandscape || isLandscapeToPortrait;
+
+            if (isRotation) {
+                // Update initial viewport to new orientation
+                initialViewport.current = { width: currentWidth, height: currentHeight };
+                return;
+            }
+
+            const widthShrinkRatio = currentWidth / initialViewport.current.width;
+            const heightShrinkRatio = currentHeight / initialViewport.current.height;
+            
+            // Allow inputs like textarea to shrink height due to mobile keyboard
+            const activeTag = document.activeElement?.tagName?.toUpperCase();
+            const isInputFocused = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT';
+
+            if (widthShrinkRatio < 0.8) {
+                // Width drastically reduced -> Split screen or floating window
+                triggerCheatingAlert();
+            } else if (heightShrinkRatio < 0.7 && !isInputFocused) {
+                // Height drastically reduced without input focus -> Floating keyboard or horizontal split screen
+                triggerCheatingAlert();
+            }
+        }, 500);
+    };
 
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('resize', handleResize);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
 
     return () => {
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      clearTimeout(resizeTimer);
     };
   }, [cheatingAttempts, settings.antiCheat, isFrozen]);
 
