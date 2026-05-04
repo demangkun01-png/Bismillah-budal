@@ -1,0 +1,11 @@
+193:  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU' | 'DAFTAR_HADIR' | 'ANTI_CHEAT' | 'PELANGGARAN' | 'THEME' | 'STAFF' | 'TROUBLESHOOTING' | 'PENGAWAS'>('DASHBOARD');
+254:  // MAPPING / SCHEDULE STATE
+383:  // MAPPING STATES
+1107:  // --- MAPPING LOGIC ---
+3662:                  <NavItem id="MAPPING" label="Mapping Sekolah" icon={Map} />
+4154:          {/* MAPPING SEKOLAH */}
+4155:          {activeTab === 'MAPPING' && (
+4383:                  {/* DAFTAR RIWAYAT MAPPING */}
+6253:      {/* EDIT MODAL FOR MAPPING / SCHEDULE */}
+6311:                      {/* --- JOS JIS MAPPING UI --- */}
+7498:      {/* EDIT MAPPING GROUP MODAL */}

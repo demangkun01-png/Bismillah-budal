@@ -335,7 +335,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [resultSessionFilter, setResultSessionFilter] = useState<string>('ALL');
   const [resultClassFilter, setResultClassFilter] = useState<string>('ALL');
   const [resultExamFilter, setResultExamFilter] = useState<string>('ALL');
-  const [resultSubTab, setResultSubTab] = useState<'TABLE' | 'REVIEW'>('TABLE');
+  const [resultSubTab, setResultSubTab] = useState<'TABLE' | 'REVIEW' | 'SUSULAN'>('TABLE');
+  const [susulanSortConfig, setSusulanSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>({key: 'studentName', direction: 'asc'});
   const [pelanggaranSubjectFilter, setPelanggaranSubjectFilter] = useState<string>('ALL');
   const [pelanggaranSortConfig, setPelanggaranSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>({key: 'cheatingAttempts', direction: 'desc'});
   const [reviewExamFilter, setReviewExamFilter] = useState<string>('ALL');
@@ -2434,6 +2435,124 @@ ANS: B`;
 
       printWindow.document.write(content);
       printWindow.document.close();
+  };
+
+  const handleExportSusulanPDF = () => {
+        const studentUsers = users.filter(u => u.role === UserRole.STUDENT);
+        const mappedStudents: any[] = [];
+        
+        studentUsers.forEach(st => {
+            const studentSchool = (st.school || '').trim().toLowerCase();
+            const studentExams = exams.filter(e => {
+                const hasSchoolAccess = e.schoolAccess?.some(s => s.trim().toLowerCase() === studentSchool);
+                const hasDirectMapping = st.mappings?.some(m => m.examId === e.id);
+                return hasSchoolAccess || hasDirectMapping;
+            });
+            
+            studentExams.forEach(exam => {
+                if (resultExamFilter !== 'ALL' && exam.title !== resultExamFilter) return;
+                
+                const hasSubmitted = results.some(r => r.studentId === st.id && r.examId === exam.id && r.status === 'finished');
+                if (!hasSubmitted) {
+                    mappedStudents.push({
+                        studentName: st.name,
+                        nomorPeserta: st.nomorPeserta || st.username,
+                        className: st.class || '-',
+                        schoolName: st.school || '-',
+                        examTitle: exam.title || exam.subject,
+                    });
+                }
+            });
+        });
+
+        if (susulanSortConfig) {
+            mappedStudents.sort((a, b) => {
+                const aVal = a[susulanSortConfig.key] || '';
+                const bVal = b[susulanSortConfig.key] || '';
+                if (aVal < bVal) return susulanSortConfig.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return susulanSortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        if (mappedStudents.length === 0) return showToast("Tidak ada data ujian susulan untuk diexport", 'info');
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const printLogo = formatImageUrl(settings.printLogoUrl || settings.schoolLogoUrl || '');
+        const kementerianLogo = formatImageUrl(settings.ministryLogoUrl || '');
+
+        let content = `
+            <html>
+            <head>
+                <title>Rekap Ujian Susulan</title>
+                <style>
+                    @page { size: A4 portrait; margin: 1cm; }
+                    body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 0; font-size: 11px; }
+                    .kop-surat { width: 100%; text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; position: relative; display: flex; align-items: center; justify-content: center; }
+                    .kop-surat img.logo-left { width: 80px; height: 80px; object-fit: contain; position: absolute; left: 10px; }
+                    .kop-surat img.logo-right { width: 80px; height: 80px; object-fit: contain; position: absolute; right: 10px; }
+                    .kop-surat .teks-kop { flex: 1; text-align: center; }
+                    .kop-surat h1 { margin: 0; font-size: 18px; font-weight: bold; text-transform: uppercase; }
+                    .kop-surat h2 { margin: 5px 0 0 0; font-size: 14px; font-weight: normal; }
+                    .kop-surat p { margin: 2px 0 0 0; font-size: 10px; }
+                    .kop-surat .subtitle { font-size: 16px; font-weight: bold; margin-top: 5px; }
+                    
+                    h3 { text-align: center; font-size: 14px; text-transform: uppercase; margin-bottom: 15px; text-decoration: underline; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    table, th, td { border: 1px solid black; }
+                    th, td { padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+                    td.text-center { text-align: center; }
+                </style>
+            </head>
+            <body>
+                <div class="kop-surat">
+                    ${kementerianLogo ? `<img src="${kementerianLogo}" class="logo-left" />` : ''}
+                    <div class="teks-kop">
+                        <div class="subtitle">${settings.appName || 'Ujian Berbasis Komputer'}</div>
+                        <h2>${settings.appSubtitle || ''}</h2>
+                    </div>
+                    ${printLogo ? `<img src="${printLogo}" class="logo-right" />` : ''}
+                </div>
+
+                <h3>Rekap Ujian Susulan</h3>
+                ${resultExamFilter !== 'ALL' ? `<p style="margin-bottom: 10px;"><strong>Mata Pelajaran:</strong> ${resultExamFilter}</p>` : ''}
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 5%">No</th>
+                            <th style="width: 25%">Nama Peserta</th>
+                            <th style="width: 20%">Nomor Peserta</th>
+                            <th style="width: 10%">Kelas</th>
+                            <th style="width: 20%">Sekolah</th>
+                            <th style="width: 20%">Mata Pelajaran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${mappedStudents.map((r, i) => `
+                            <tr>
+                                <td class="text-center">${i + 1}</td>
+                                <td>${r.studentName}</td>
+                                <td>${r.nomorPeserta}</td>
+                                <td>${r.className}</td>
+                                <td>${r.schoolName}</td>
+                                <td>${r.examTitle}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <script>
+                    window.onload = () => { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(content);
+        printWindow.document.close();
   };
 
   const insertMathTemplate = (latex: string) => {
@@ -4593,6 +4712,12 @@ ANS: B`;
                                >
                                    Review Jawaban
                                </button>
+                               <button 
+                                   onClick={() => setResultSubTab('SUSULAN')}
+                                   className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${resultSubTab === 'SUSULAN' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                               >
+                                   Ujian Susulan
+                               </button>
                            </div>
                        </div>
                        {resultSubTab === 'TABLE' && (
@@ -4607,6 +4732,13 @@ ANS: B`;
                                </button>
                                <button onClick={handleExportResultsExcel} className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-green-700 shadow-sm justify-center">
                                    <FileSpreadsheet size={16} className="mr-2"/> Export Excel (.xls)
+                               </button>
+                           </div>
+                       )}
+                       {resultSubTab === 'SUSULAN' && (
+                           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                               <button onClick={handleExportSusulanPDF} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold text-sm flex items-center shadow-sm justify-center">
+                                   <Download size={16} className="mr-2"/> Export PDF
                                </button>
                            </div>
                        )}
@@ -4724,6 +4856,85 @@ ANS: B`;
                       </table>
                   </div>
                        </>
+                   ) : resultSubTab === 'SUSULAN' ? (
+                       <div className="animate-in slide-in-from-right duration-300">
+                           <div className="mb-6 bg-gray-50 p-4 rounded-xl border flex flex-wrap items-center gap-4">
+                               <div className="flex items-center gap-2">
+                                   <Filter size={18} className="text-gray-500"/>
+                                   <span className="text-sm font-bold text-gray-700">Filter:</span>
+                               </div>
+                               <select className="border rounded-lg p-2 text-sm min-w-[180px] bg-white" value={resultExamFilter} onChange={e => setResultExamFilter(e.target.value)}>
+                                   <option value="ALL">Semua Mapel</option>
+                                   {resultExams.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                               </select>
+                           </div>
+
+                           <div className="overflow-x-auto border rounded-xl bg-white shadow-sm">
+                               <table className="w-full text-sm text-left">
+                                   <thead className="bg-gray-50 font-bold border-b">
+                                       <tr>
+                                           <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => setSusulanSortConfig({key: 'studentName', direction: susulanSortConfig?.key === 'studentName' && susulanSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>Nama {susulanSortConfig?.key === 'studentName' && (susulanSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                                           <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => setSusulanSortConfig({key: 'nomorPeserta', direction: susulanSortConfig?.key === 'nomorPeserta' && susulanSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>Nomor Peserta {susulanSortConfig?.key === 'nomorPeserta' && (susulanSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                                           <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => setSusulanSortConfig({key: 'className', direction: susulanSortConfig?.key === 'className' && susulanSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>Kelas {susulanSortConfig?.key === 'className' && (susulanSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                                           <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => setSusulanSortConfig({key: 'schoolName', direction: susulanSortConfig?.key === 'schoolName' && susulanSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>Sekolah {susulanSortConfig?.key === 'schoolName' && (susulanSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                                           <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => setSusulanSortConfig({key: 'examTitle', direction: susulanSortConfig?.key === 'examTitle' && susulanSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>Mapel {susulanSortConfig?.key === 'examTitle' && (susulanSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                                       </tr>
+                                   </thead>
+                                   <tbody className="divide-y">
+                                       {(() => {
+                                           const studentUsers = users.filter(u => u.role === UserRole.STUDENT);
+                                           const mappedStudents: any[] = [];
+                                           
+                                           studentUsers.forEach(st => {
+                                               const studentSchool = (st.school || '').trim().toLowerCase();
+                                               const studentExams = exams.filter(e => {
+                                                   const hasSchoolAccess = e.schoolAccess?.some(s => s.trim().toLowerCase() === studentSchool);
+                                                   const hasDirectMapping = st.mappings?.some(m => m.examId === e.id);
+                                                   return hasSchoolAccess || hasDirectMapping;
+                                               });
+                                               studentExams.forEach(exam => {
+                                                   if (resultExamFilter !== 'ALL' && exam.title !== resultExamFilter) return;
+                                                   const hasSubmitted = results.some(r => r.studentId === st.id && r.examId === exam.id && r.status === 'finished');
+                                                   if (!hasSubmitted) {
+                                                       mappedStudents.push({
+                                                           studentName: st.name,
+                                                           nomorPeserta: st.nomorPeserta || st.username,
+                                                           className: st.class || '-',
+                                                           schoolName: st.school || '-',
+                                                           examTitle: exam.title || exam.subject,
+                                                       });
+                                                   }
+                                               });
+                                           });
+
+                                           if (susulanSortConfig) {
+                                               mappedStudents.sort((a, b) => {
+                                                   const aVal = a[susulanSortConfig.key] || '';
+                                                   const bVal = b[susulanSortConfig.key] || '';
+                                                   if (aVal < bVal) return susulanSortConfig.direction === 'asc' ? -1 : 1;
+                                                   if (aVal > bVal) return susulanSortConfig.direction === 'asc' ? 1 : -1;
+                                                   return 0;
+                                               });
+                                           }
+
+                                           if (mappedStudents.length === 0) {
+                                               return (<tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Belum ada data ujian susulan.</td></tr>);
+                                           }
+
+                                           return mappedStudents.map((r, i) => (
+                                               <tr key={i} className="hover:bg-gray-50 transition">
+                                                   <td className="p-4 font-medium text-gray-900">{r.studentName}</td>
+                                                   <td className="p-4 font-mono text-gray-600">{r.nomorPeserta}</td>
+                                                   <td className="p-4 text-gray-600">{r.className}</td>
+                                                   <td className="p-4 text-gray-600">{r.schoolName}</td>
+                                                   <td className="p-4 text-gray-700 font-medium">{r.examTitle}</td>
+                                               </tr>
+                                           ));
+                                       })()}
+                                   </tbody>
+                               </table>
+                           </div>
+                       </div>
                    ) : (
                        <div className="animate-in slide-in-from-right duration-300">
                            {selectedReviewResult ? (
