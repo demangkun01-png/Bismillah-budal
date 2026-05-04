@@ -190,7 +190,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   ]);
 
   // TABS
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU' | 'DAFTAR_HADIR' | 'ANTI_CHEAT' | 'THEME' | 'STAFF' | 'TROUBLESHOOTING' | 'PENGAWAS'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU' | 'DAFTAR_HADIR' | 'ANTI_CHEAT' | 'PELANGGARAN' | 'THEME' | 'STAFF' | 'TROUBLESHOOTING' | 'PENGAWAS'>('DASHBOARD');
   
   // STAFF STATE
   const [staffList, setStaffList] = useState<User[]>([]);
@@ -336,6 +336,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [resultClassFilter, setResultClassFilter] = useState<string>('ALL');
   const [resultExamFilter, setResultExamFilter] = useState<string>('ALL');
   const [resultSubTab, setResultSubTab] = useState<'TABLE' | 'REVIEW'>('TABLE');
+  const [pelanggaranSubjectFilter, setPelanggaranSubjectFilter] = useState<string>('ALL');
+  const [pelanggaranSortConfig, setPelanggaranSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>({key: 'cheatingAttempts', direction: 'desc'});
   const [reviewExamFilter, setReviewExamFilter] = useState<string>('ALL');
   const [reviewClassFilter, setReviewClassFilter] = useState<string>('ALL');
   const [selectedReviewResult, setSelectedReviewResult] = useState<ExamResult | null>(null);
@@ -2331,6 +2333,109 @@ ANS: B`;
       printWindow.document.close();
   };
 
+  const handleExportPelanggaranPDF = () => {
+      let filtered = results.filter(r => r.cheatingAttempts > 0);
+      if (pelanggaranSubjectFilter !== 'ALL') {
+          filtered = filtered.filter(r => r.examTitle === pelanggaranSubjectFilter);
+      }
+      if (pelanggaranSortConfig) {
+          filtered.sort((a, b) => {
+              let aValue, bValue;
+              if (pelanggaranSortConfig.key === 'studentName') {
+                  aValue = a.studentName || '';
+                  bValue = b.studentName || '';
+              } else if (pelanggaranSortConfig.key === 'examTitle') {
+                  aValue = a.examTitle || '';
+                  bValue = b.examTitle || '';
+              } else {
+                  aValue = a.cheatingAttempts || 0;
+                  bValue = b.cheatingAttempts || 0;
+              }
+
+              if (aValue < bValue) return pelanggaranSortConfig.direction === 'asc' ? -1 : 1;
+              if (aValue > bValue) return pelanggaranSortConfig.direction === 'asc' ? 1 : -1;
+              return 0;
+          });
+      }
+
+      if (filtered.length === 0) return showToast("Tidak ada data pelanggaran untuk diexport", 'info');
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const printLogo = formatImageUrl(settings.printLogoUrl || settings.schoolLogoUrl || '');
+      const kementerianLogo = formatImageUrl(settings.ministryLogoUrl || '');
+
+      let content = `
+          <html>
+          <head>
+              <title>Riwayat Pelanggaran Peserta</title>
+              <style>
+                  @page { size: A4; margin: 1cm; }
+                  body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 0; font-size: 12px; }
+                  .kop-surat { width: 100%; text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; position: relative; display: flex; align-items: center; justify-content: center; }
+                  .kop-surat img.logo-left { width: 80px; height: 80px; object-fit: contain; position: absolute; left: 10px; }
+                  .kop-surat img.logo-right { width: 80px; height: 80px; object-fit: contain; position: absolute; right: 10px; }
+                  .kop-surat .teks-kop { flex: 1; text-align: center; }
+                  .kop-surat h1 { margin: 0; font-size: 18px; font-weight: bold; text-transform: uppercase; }
+                  .kop-surat h2 { margin: 5px 0 0 0; font-size: 14px; font-weight: normal; }
+                  .kop-surat p { margin: 2px 0 0 0; font-size: 10px; }
+                  .kop-surat .subtitle { font-size: 16px; font-weight: bold; margin-top: 5px; }
+                  
+                  h3 { text-align: center; font-size: 14px; text-transform: uppercase; margin-bottom: 15px; text-decoration: underline; }
+                  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                  table, th, td { border: 1px solid black; }
+                  th, td { padding: 8px; text-align: left; }
+                  th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+                  td.text-center { text-align: center; }
+              </style>
+          </head>
+          <body>
+              <div class="kop-surat">
+                  ${kementerianLogo ? `<img src="${kementerianLogo}" class="logo-left" />` : ''}
+                  <div class="teks-kop">
+                      <div class="subtitle">${settings.appName || 'Ujian Berbasis Komputer'}</div>
+                      <h2>${settings.appSubtitle || ''}</h2>
+                  </div>
+                  ${printLogo ? `<img src="${printLogo}" class="logo-right" />` : ''}
+              </div>
+
+              <h3>Riwayat Pelanggaran Peserta</h3>
+              ${pelanggaranSubjectFilter !== 'ALL' ? `<p style="margin-bottom: 10px;"><strong>Mata Pelajaran:</strong> ${pelanggaranSubjectFilter}</p>` : ''}
+              
+              <table>
+                  <thead>
+                      <tr>
+                          <th style="width: 5%">No</th>
+                          <th style="width: 35%">Nama Peserta</th>
+                          <th style="width: 25%">Mata Pelajaran</th>
+                          <th style="width: 20%">Banyak Pelanggaran</th>
+                          <th style="width: 15%">Status</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${filtered.map((r, i) => `
+                          <tr>
+                              <td class="text-center">${i + 1}</td>
+                              <td>${r.studentName}</td>
+                              <td>${r.examTitle}</td>
+                              <td class="text-center"><strong>${r.cheatingAttempts || 0}</strong></td>
+                              <td class="text-center">${r.cheatingAttempts >= 5 ? 'Sangat Tinggi' : r.cheatingAttempts >= 3 ? 'Tinggi' : 'Rendah'}</td>
+                          </tr>
+                      `).join('')}
+                  </tbody>
+              </table>
+              <script>
+                  window.onload = () => { window.print(); }
+              </script>
+          </body>
+          </html>
+      `;
+
+      printWindow.document.write(content);
+      printWindow.document.close();
+  };
+
   const insertMathTemplate = (latex: string) => {
       const quill = quillRef.current?.getEditor();
       if (quill) {
@@ -3584,6 +3689,7 @@ ANS: B`;
                   <>
                       <div className="my-2 border-t border-white/10"></div>
                       <NavItem id="ANTI_CHEAT" label="Sistem Anti-Curang" icon={ShieldAlert} />
+                      <NavItem id="PELANGGARAN" label="Riwayat Pelanggaran" icon={AlertTriangle} />
                       <NavItem id="TROUBLESHOOTING" label="Troubleshooting" icon={Wrench} />
                   </>
               )}
@@ -5573,6 +5679,93 @@ ANS: B`;
                                    </table>
                                )}
                           </div>
+                      </div>
+                  </div>
+              </div>
+          )}
+
+          {/* RIWAYAT PELANGGARAN PANEL */}
+          {activeTab === 'PELANGGARAN' && (
+              <div className="space-y-6 animate-in fade-in print:hidden">
+                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                      <h3 className="font-bold text-lg flex items-center"><AlertTriangle size={24} className="mr-2 text-red-600"/> Riwayat Pelanggaran Peserta</h3>
+                      <button onClick={handleExportPelanggaranPDF} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition flex items-center gap-2 w-full md:w-auto justify-center">
+                          <Download size={16} /> <span>Download PDF</span>
+                      </button>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                      <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                              <select 
+                                  className="border rounded-lg p-2 text-sm font-bold shadow-sm"
+                                  value={pelanggaranSubjectFilter}
+                                  onChange={e => setPelanggaranSubjectFilter(e.target.value)}
+                              >
+                                  <option value="ALL">Semua Mata Pelajaran</option>
+                                  {Array.from(new Set(results.filter(r => r.cheatingAttempts > 0).map(r => r.examTitle).filter(Boolean))).map(title => (
+                                      <option key={title} value={title}>{title}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+                      
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm whitespace-nowrap">
+                              <thead className="bg-gray-100/50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+                                  <tr>
+                                      <th className="p-3">No</th>
+                                      <th className="p-3 cursor-pointer hover:bg-gray-200 transition" onClick={() => setPelanggaranSortConfig({key: 'studentName', direction: pelanggaranSortConfig?.key === 'studentName' && pelanggaranSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>
+                                          <div className="flex items-center gap-1">Nama Peserta <ArrowRightLeft size={12} className="rotate-90"/></div>
+                                      </th>
+                                      <th className="p-3 cursor-pointer hover:bg-gray-200 transition" onClick={() => setPelanggaranSortConfig({key: 'examTitle', direction: pelanggaranSortConfig?.key === 'examTitle' && pelanggaranSortConfig.direction === 'asc' ? 'desc' : 'asc'})}>
+                                          <div className="flex items-center gap-1">Mata Pelajaran <ArrowRightLeft size={12} className="rotate-90"/></div>
+                                      </th>
+                                      <th className="p-3 cursor-pointer hover:bg-gray-200 transition text-center" onClick={() => setPelanggaranSortConfig({key: 'cheatingAttempts', direction: pelanggaranSortConfig?.key === 'cheatingAttempts' && pelanggaranSortConfig.direction === 'desc' ? 'asc' : 'desc'})}>
+                                          <div className="flex justify-center items-center gap-1">Banyak Pelanggaran <ArrowRightLeft size={12} className="rotate-90"/></div>
+                                      </th>
+                                      <th className="p-3 text-center">Tingkat Pelanggaran</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {results
+                                      .filter(r => r.cheatingAttempts > 0)
+                                      .filter(r => pelanggaranSubjectFilter === 'ALL' || r.examTitle === pelanggaranSubjectFilter)
+                                      .sort((a, b) => {
+                                          if (!pelanggaranSortConfig) return 0;
+                                          let aVal = a[pelanggaranSortConfig.key as keyof ExamResult] || '';
+                                          let bVal = b[pelanggaranSortConfig.key as keyof ExamResult] || '';
+                                          if (aVal < bVal) return pelanggaranSortConfig.direction === 'asc' ? -1 : 1;
+                                          if (aVal > bVal) return pelanggaranSortConfig.direction === 'asc' ? 1 : -1;
+                                          return 0;
+                                      })
+                                      .map((r, idx) => (
+                                          <tr key={idx} className="hover:bg-gray-50 transition">
+                                              <td className="p-3 font-medium text-gray-500 w-12 text-center">{idx + 1}</td>
+                                              <td className="p-3 font-bold text-gray-800">{r.studentName}</td>
+                                              <td className="p-3 text-gray-600 font-medium">{r.examTitle}</td>
+                                              <td className="p-3 text-center">
+                                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/10">
+                                                      {r.cheatingAttempts} Kali
+                                                  </span>
+                                              </td>
+                                              <td className="p-3 text-center">
+                                                  <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase ${r.cheatingAttempts >= 5 ? 'bg-red-600 text-white' : r.cheatingAttempts >= 3 ? 'bg-orange-500 text-white' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                      {r.cheatingAttempts >= 5 ? 'Sangat Tinggi' : r.cheatingAttempts >= 3 ? 'Tinggi' : 'Rendah'}
+                                                  </span>
+                                              </td>
+                                          </tr>
+                                      ))
+                                  }
+                                  {results.filter(r => r.cheatingAttempts > 0).filter(r => pelanggaranSubjectFilter === 'ALL' || r.examTitle === pelanggaranSubjectFilter).length === 0 && (
+                                      <tr>
+                                          <td colSpan={5} className="p-8 text-center text-gray-400 font-bold">
+                                              Belum ada data pelanggaran
+                                          </td>
+                                      </tr>
+                                  )}
+                              </tbody>
+                          </table>
                       </div>
                   </div>
               </div>
