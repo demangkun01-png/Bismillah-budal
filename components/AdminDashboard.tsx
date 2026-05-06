@@ -434,8 +434,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
     return Object.values(history).sort((a, b) => {
         // Sort by date desc, then session asc
-        if (a.date !== b.date) return b.date.localeCompare(a.date);
-        return a.session.localeCompare(b.session);
+        if (a.date !== b.date) return String(b.date || '').localeCompare(String(a.date || ''));
+        return String(a.session || '').localeCompare(String(b.session || ''));
     });
   };
 
@@ -1593,7 +1593,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           if (dhSchoolFilter !== 'ALL' && u.school !== dhSchoolFilter) return false;
           if (dhRoomFilter !== 'ALL' && u.room !== dhRoomFilter && !u.mappings?.some((m: any) => m.room === dhRoomFilter)) return false;
           return true;
-      }).sort((a, b) => a.name.localeCompare(b.name));
+      }).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
@@ -3505,8 +3505,8 @@ ANS: B`;
     const sortedGroups = Array.from(groupsFromMappings).sort((a, b) => {
         const [roomA, sessionA] = a.split('|');
         const [roomB, sessionB] = b.split('|');
-        if (roomA !== roomB) return roomA.localeCompare(roomB);
-        return sessionA.localeCompare(sessionB);
+        if (roomA !== roomB) return String(roomA || '').localeCompare(String(roomB || ''));
+        return String(sessionA || '').localeCompare(String(sessionB || ''));
     });
     
     const sessionChartData = sortedGroups.map(groupKey => {
@@ -4646,7 +4646,7 @@ ANS: B`;
                                        return acc;
                                    }, {} as Record<string, number>);
                                    
-                                   const entries = Object.entries(roomCounts).sort((a, b) => a[0].localeCompare(b[0]));
+                                   const entries = Object.entries(roomCounts).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
                                    if(entries.length === 0) return <span className="text-xs text-gray-500">Belum ada data peserta.</span>;
                                    
                                    return entries.map(([room, count]) => (
