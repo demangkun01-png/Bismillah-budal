@@ -2337,7 +2337,10 @@ ANS: B`;
   const handleExportPelanggaranPDF = () => {
       let filtered = results.filter(r => r.cheatingAttempts > 0);
       if (pelanggaranSubjectFilter !== 'ALL') {
-          filtered = filtered.filter(r => r.examTitle === pelanggaranSubjectFilter);
+          filtered = filtered.filter(r => {
+              const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+              return examTitle === pelanggaranSubjectFilter;
+          });
       }
       if (pelanggaranSortConfig) {
           filtered.sort((a, b) => {
@@ -2419,7 +2422,7 @@ ANS: B`;
                           <tr>
                               <td class="text-center">${i + 1}</td>
                               <td>${r.studentName}</td>
-                              <td>${r.examTitle}</td>
+                              <td>${exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
                               <td class="text-center"><strong>${r.cheatingAttempts || 0}</strong></td>
                               <td class="text-center">${r.cheatingAttempts >= 5 ? 'Sangat Tinggi' : r.cheatingAttempts >= 3 ? 'Tinggi' : 'Rendah'}</td>
                           </tr>
@@ -2540,7 +2543,7 @@ ANS: B`;
                                 <td>${r.nomorPeserta}</td>
                                 <td>${r.className}</td>
                                 <td>${r.schoolName}</td>
-                                <td>${r.examTitle}</td>
+                                <td>${exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -2574,7 +2577,8 @@ ANS: B`;
           if (resultRoomFilter !== 'ALL' && mapping?.room !== resultRoomFilter) return false;
           if (resultSessionFilter !== 'ALL' && mapping?.session !== resultSessionFilter) return false;
           if (resultClassFilter !== 'ALL' && student?.class !== resultClassFilter) return false;
-          if (resultExamFilter !== 'ALL' && r.examTitle !== resultExamFilter) return false;
+          const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+          if (resultExamFilter !== 'ALL' && examTitle !== resultExamFilter) return false;
           
           return true;
       });
@@ -2667,7 +2671,10 @@ ANS: B`;
     let updatedCount = 0;
 
     try {
-      const resultsToUpdate = results.filter(r => r.examTitle === resultExamFilter);
+      const resultsToUpdate = results.filter(r => {
+          const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+          return examTitle === resultExamFilter;
+      });
       
       if (resultsToUpdate.length === 0) {
         showToast("Tidak ada hasil yang ditemukan untuk mapel ini.", 'info');
@@ -2866,7 +2873,7 @@ ANS: B`;
   const classes = (Array.from(new Set(users.map(u => u.class))).filter(Boolean) as string[]).sort();
   const resultExams = (Array.from(new Set([
       ...exams.map(e => e.title),
-      ...results.map(r => r.examTitle)
+      ...results.map(r => exams.find(e => e.id === r.examId)?.title || r.examTitle)
   ])).filter(Boolean) as string[]).sort();
   const totalSchools = schools.length;
 
@@ -3734,7 +3741,7 @@ ANS: B`;
                                         </div>
                                         <div>
                                             <h4 className="text-sm font-bold text-gray-800">{r.studentName || 'Peserta'}</h4>
-                                            <p className="text-[10px] text-gray-400">Menyelesaikan {r.examTitle || 'Ujian'}</p>
+                                            <p className="text-[10px] text-gray-400">Menyelesaikan {exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Ujian'}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
@@ -4835,7 +4842,8 @@ ANS: B`;
                                     if (resultClassFilter !== 'ALL' && st?.class !== resultClassFilter) return false;
                                     if (resultRoomFilter !== 'ALL' && mapping?.room !== resultRoomFilter) return false;
                                     if (resultSessionFilter !== 'ALL' && mapping?.session !== resultSessionFilter) return false;
-                                    if (resultExamFilter !== 'ALL' && r.examTitle !== resultExamFilter) return false;
+                                    const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+                                    if (resultExamFilter !== 'ALL' && examTitle !== resultExamFilter) return false;
                                     
                                     return true;
                                 })
@@ -5298,7 +5306,10 @@ ANS: B`;
                                        {results
                                            .filter(r => {
                                                const student = users.find(u => u.id === r.studentId);
-                                               if (reviewExamFilter !== 'ALL' && r.examTitle !== reviewExamFilter) return false;
+                                               if (reviewExamFilter !== 'ALL') {
+                                                   const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+                                                   if (examTitle !== reviewExamFilter) return false;
+                                               }
                                                if (reviewClassFilter !== 'ALL' && student?.class !== reviewClassFilter) return false;
                                                return true;
                                            })
@@ -5335,7 +5346,7 @@ ANS: B`;
                                                            <p className="text-xs font-bold text-gray-500 mb-4">{student?.nomorPeserta || '-'} • {student?.class || '-'}</p>
                                                            
                                                            <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
-                                                               <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{r.examTitle}</span>
+                                                               <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{exams.find(e => e.id === r.examId)?.title || r.examTitle}</span>
                                                                <span className="text-blue-600 font-bold text-xs flex items-center group-hover:translate-x-1 transition-transform">
                                                                    Review <ChevronRight size={14} className="ml-1"/>
                                                                </span>
@@ -5908,7 +5919,7 @@ ANS: B`;
                                                           <div className="font-bold text-gray-800">{r.studentName}</div>
                                                           <div className="text-xs text-gray-500">{users.find(u => u.id === r.studentId)?.school || '-'}</div>
                                                       </td>
-                                                      <td className="p-2 text-xs text-gray-600">{r.examTitle}</td>
+                                                      <td className="p-2 text-xs text-gray-600">{exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
                                                       <td className="p-2 text-center">
                                                           {r.status === 'working' && <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Sedang Ujian</span>}
                                                           {r.status === 'finished' && <span className="text-[10px] font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Selesai</span>}
@@ -5953,7 +5964,7 @@ ANS: B`;
                                   <option value="ALL">Semua Mata Pelajaran</option>
                                   {Array.from(new Set([
                                       ...exams.map(e => e.title),
-                                      ...results.filter(r => r.cheatingAttempts > 0).map(r => r.examTitle)
+                                      ...results.filter(r => r.cheatingAttempts > 0).map(r => exams.find(e => e.id === r.examId)?.title || r.examTitle)
                                   ].filter(Boolean))).sort().map(title => (
                                       <option key={title} value={title}>{title}</option>
                                   ))}
@@ -5981,7 +5992,11 @@ ANS: B`;
                               <tbody className="divide-y divide-gray-100">
                                   {results
                                       .filter(r => r.cheatingAttempts > 0)
-                                      .filter(r => pelanggaranSubjectFilter === 'ALL' || r.examTitle === pelanggaranSubjectFilter)
+                                      .filter(r => {
+                                          if (pelanggaranSubjectFilter === 'ALL') return true;
+                                          const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+                                          return examTitle === pelanggaranSubjectFilter;
+                                      })
                                       .sort((a, b) => {
                                           if (!pelanggaranSortConfig) return 0;
                                           let aVal = a[pelanggaranSortConfig.key as keyof ExamResult] || '';
@@ -5994,7 +6009,7 @@ ANS: B`;
                                           <tr key={idx} className="hover:bg-gray-50 transition">
                                               <td className="p-3 font-medium text-gray-500 w-12 text-center">{idx + 1}</td>
                                               <td className="p-3 font-bold text-gray-800">{r.studentName}</td>
-                                              <td className="p-3 text-gray-600 font-medium">{r.examTitle}</td>
+                                              <td className="p-3 text-gray-600 font-medium">{exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
                                               <td className="p-3 text-center">
                                                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/10">
                                                       {r.cheatingAttempts} Kali
@@ -6008,7 +6023,11 @@ ANS: B`;
                                           </tr>
                                       ))
                                   }
-                                  {results.filter(r => r.cheatingAttempts > 0).filter(r => pelanggaranSubjectFilter === 'ALL' || r.examTitle === pelanggaranSubjectFilter).length === 0 && (
+                                  {results.filter(r => r.cheatingAttempts > 0).filter(r => {
+                                          if (pelanggaranSubjectFilter === 'ALL') return true;
+                                          const examTitle = exams.find(e => e.id === r.examId)?.title || r.examTitle || 'Unknown';
+                                          return examTitle === pelanggaranSubjectFilter;
+                                      }).length === 0 && (
                                       <tr>
                                           <td colSpan={5} className="p-8 text-center text-gray-400 font-bold">
                                               Belum ada data pelanggaran

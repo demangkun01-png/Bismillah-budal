@@ -2,6 +2,29 @@ import { supabase } from './supabase';
 import { User, UserRole, Exam, Question, ExamResult, AppSettings } from '../types';
 
 // Supabase wrapper
+const fetchAllRows = async (table: string, selectQuery: string = '*', matchQuery?: Record<string, any>) => {
+    let allData: any[] = [];
+    let count = 0;
+    while(true) {
+        let query = supabase.from(table).select(selectQuery).range(count, count + 999);
+        if (matchQuery) {
+            for (const key of Object.keys(matchQuery)) {
+                query = query.eq(key, matchQuery[key]);
+            }
+        }
+        const { data, error } = await query;
+        if (error) {
+            console.error(`Error fetching from ${table}:`, error);
+            throw error;
+        }
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < 1000) break;
+        count += 1000;
+    }
+    return allData;
+};
+
 export const db = {
   getSettings: async (): Promise<AppSettings> => {
     const { data } = await supabase.from('settings').select('data').eq('id', 1).single();
@@ -84,15 +107,11 @@ export const db = {
     }, { onConflict: 'exam_id,peserta_id' });
   },
   getAllResults: async (): Promise<ExamResult[]> => {
-    const [resultsRes, studentsRes, subjectsRes] = await Promise.all([
-        supabase.from('results').select('*'),
-        supabase.from('students').select('id, name'),
-        supabase.from('subjects').select('id, name')
+    const [data, students, subjects] = await Promise.all([
+        fetchAllRows('results', '*', { status: 'finished' }),
+        fetchAllRows('students', 'id, name'),
+        fetchAllRows('subjects', 'id, name')
     ]);
-
-    const data = resultsRes.data || [];
-    const students = studentsRes.data || [];
-    const subjects = subjectsRes.data || [];
 
     return data.map(d => {
         const student = students.find(s => s.id === d.peserta_id);
@@ -108,15 +127,11 @@ export const db = {
     });
   },
   getUsers: async (): Promise<User[]> => {
-    const [studentsRes, staffRes, mappingRes] = await Promise.all([
-        supabase.from('students').select('*'),
-        supabase.from('staff').select('*'),
-        supabase.from('student_exam_mapping').select('*')
+    const [students, staff, mappingsData] = await Promise.all([
+        fetchAllRows('students', '*'),
+        fetchAllRows('staff', '*'),
+        fetchAllRows('student_exam_mapping', '*')
     ]);
-
-    const students = studentsRes.data || [];
-    const staff = staffRes.data || [];
-    const mappingsData = mappingRes.data || [];
     
     let allUsers: User[] = [];
     if(students.length > 0) {
@@ -170,9 +185,11 @@ export const db = {
       await supabase.from('results').update({ status: 'working', violation_count: 0 }).gt('violation_count', 0);
   },
   getLightweightMonitoringData: async (): Promise<any> => {
-    const { data: students } = await supabase.from('students').select('id, name, school, room, is_login, mappings');
-    const { data: results } = await supabase.from('results').select('id, exam_id, peserta_id, status, score, finish_time, violation_count');
-    return { students: students || [], results: results || [] };
+    const [students, results] = await Promise.all([
+        fetchAllRows('students', 'id, name, school, room, is_login, mappings'),
+        fetchAllRows('results', 'id, exam_id, peserta_id, status, score, finish_time, violation_count')
+    ]);
+    return { students, results };
   },
   updateUser: async (id: string, user: Partial<User>) => {
     await supabase.from('students').update({
