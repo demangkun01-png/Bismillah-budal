@@ -16,9 +16,10 @@
     <meta http-equiv="Expires" content="0" />
 
     <script>
+      let originalFetch = window.fetch;
       Object.defineProperty(window, 'fetch', {
-        value: window.fetch,
-        writable: true,
+        get() { return originalFetch; },
+        set(v) { originalFetch = v; },
         configurable: true
       });
     </script>

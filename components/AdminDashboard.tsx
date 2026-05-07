@@ -2609,6 +2609,7 @@ ANS: B`;
                         <th>Kelas</th>
                         <th>Sekolah</th>
                         <th>Mata Pelajaran</th>
+                        <th>Pelanggaran</th>
                         <th>Nilai</th>
                         <th>Waktu Submit</th>
                     </tr>
@@ -2624,7 +2625,8 @@ ANS: B`;
                 <td style="mso-number-format:'\\@'">${student?.nomorPeserta || student?.username || '-'}</td>
                 <td>${student?.class || '-'}</td>
                 <td>${student?.school || '-'}</td>
-                <td>${r.examTitle}</td>
+                <td>${exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
+                <td>${r.cheatingAttempts || 0}</td>
                 <td>${r.score}</td>
                 <td>${new Date(r.submittedAt).toLocaleString()}</td>
             </tr>
@@ -2861,7 +2863,10 @@ ANS: B`;
   const rooms = (Array.from(new Set(users.flatMap(u => [u.room, ...(u.mappings?.map(m => m.room) || [])]))).filter(Boolean) as string[]).sort();
   const sessions = (Array.from(new Set(users.flatMap(u => [u.session, ...(u.mappings?.map(m => m.session) || [])]))).filter(Boolean) as string[]).sort();
   const classes = (Array.from(new Set(users.map(u => u.class))).filter(Boolean) as string[]).sort();
-  const resultExams = (Array.from(new Set(results.map(r => r.examTitle))).filter(Boolean) as string[]).sort();
+  const resultExams = (Array.from(new Set([
+      ...exams.map(e => e.title),
+      ...results.map(r => r.examTitle)
+  ])).filter(Boolean) as string[]).sort();
   const totalSchools = schools.length;
 
   // Responsive Nav Item
@@ -2885,9 +2890,8 @@ ANS: B`;
   const drvRooms = (Array.from(new Set(baseMonitoringUsers.filter(u => monitoringSchoolFilter === 'ALL' || u.school === monitoringSchoolFilter).flatMap(u => [u.room, ...(u.mappings?.map(m => m.room) || [])]))).filter(Boolean) as string[]).sort();
   const drvSessions = (Array.from(new Set(baseMonitoringUsers.filter(u => monitoringSchoolFilter === 'ALL' || u.school === monitoringSchoolFilter).flatMap(u => [u.session, ...(u.mappings?.map(m => m.session) || [])]))).filter(Boolean) as string[]).sort();
   
-  // Deriving exams based on mappings present in viewable users
-  const drvExamIds = Array.from(new Set(baseMonitoringUsers.filter(u => monitoringSchoolFilter === 'ALL' || u.school === monitoringSchoolFilter).flatMap(u => u.mappings?.map(m => m.examId) || [])));
-  const drvExams = exams.filter(e => drvExamIds.includes(e.id));
+  // Use all exams for dropdowns so newly mapped or unassigned exams are selectable
+  const drvExams = exams;
 
   // Monitoring Filtered Users
   let finalMonitoringUsers = baseMonitoringUsers.filter(u => {
@@ -2962,17 +2966,34 @@ ANS: B`;
   const { assigned: assignedSchools, available: availableSchools, busyCount } = isEditModalOpen ? getSchoolsAvailability() : { assigned: [], available: [], busyCount: 0 };
 
   // --- AGGREGATION FOR "JUMLAH SEKOLAH" DASHBOARD VIEW ---
-  const getSchoolStats = (schoolName: string) => {
-      const studentsInSchool = users.filter(u => u.school === schoolName);
+  const getSchoolStats = (schoolName: string, sessionFilter?: string) => {
+      let studentsInSchool = users.filter(u => u.school === schoolName);
+      if (sessionFilter) {
+          studentsInSchool = studentsInSchool.filter(u => u.mappings?.some(m => m.session === sessionFilter));
+      }
       const notLogin = studentsInSchool.filter(u => u.status !== 'working' && u.status !== 'finished').length;
       const working = studentsInSchool.filter(u => u.status === 'working').length;
       const finished = studentsInSchool.filter(u => u.status === 'finished').length;
       
       // Get exam mapping for today
       const todayStr = localTodayStr;
-      const todayExam = exams.find(e => e.examDate === todayStr && e.schoolAccess?.includes(schoolName));
       
-      return { notLogin, working, finished, total: studentsInSchool.length, todayExamTitle: todayExam?.title || '-' };
+      const mappedExamTitles = Array.from(new Set(studentsInSchool.flatMap(u => 
+          (u.mappings || []).filter(m => {
+              if (sessionFilter && m.session !== sessionFilter) return false;
+              if (m.examDate === todayStr) return true;
+              if (m.examDate?.includes('|')) {
+                  const [start, end] = m.examDate.split('|');
+                  return start <= todayStr && end >= todayStr;
+              }
+              return false;
+          }).map(m => exams.find(e => e.id === m.examId)?.title).filter(Boolean)
+      )));
+
+      const todayExam = exams.find(e => e.examDate === todayStr && e.schoolAccess?.includes(schoolName));
+      const todayExamTitle = mappedExamTitles.length > 0 ? mappedExamTitles.join(', ') : (todayExam?.title || '-');
+      
+      return { notLogin, working, finished, total: studentsInSchool.length, todayExamTitle };
   };
 
   const handleDownloadSchoolStats = () => {
@@ -3298,7 +3319,7 @@ ANS: B`;
                                                 </td>
                                             </tr>
                                             {sessionSchools.map(school => {
-                                                const stats = getSchoolStats(school);
+                                                const stats = getSchoolStats(school, session);
                                                 // Filter stats for this session only? 
                                                 // The requirement says "Rekap Mapping & Status Sekolah ditampilkan persesi"
                                                 // So I should probably filter the stats by session too.
@@ -3486,6 +3507,17 @@ ANS: B`;
         );
     }
 
+    // Helper to check if a date string (which might be a range) includes a specific date
+    const encompassesDate = (mappingDate: string | undefined, targetDate: string) => {
+        if (!mappingDate) return false;
+        if (mappingDate === targetDate) return true;
+        if (mappingDate.includes('|')) {
+            const [start, end] = mappingDate.split('|');
+            return start <= targetDate && end >= targetDate;
+        }
+        return false;
+    };
+
     // --- BAR CHART DATA PREPARATION (ROOM & SESSION BASED) ---
     const todayStr = graphDate; 
     const isAllSessions = graphFilterMode === 'ALL';
@@ -3494,7 +3526,7 @@ ANS: B`;
     const groupsFromMappings = new Set<string>();
     users.forEach(u => {
         u.mappings?.forEach(m => {
-            if (isAllSessions || m.examDate === todayStr) {
+            if (isAllSessions || encompassesDate(m.examDate, todayStr)) {
                 if (m.room && m.session) {
                     groupsFromMappings.add(`${m.room}|${m.session}`);
                 }
@@ -3517,7 +3549,7 @@ ANS: B`;
             u.mappings?.some(m => 
                 m.room === roomName && 
                 m.session === sessionName && 
-                (isAllSessions || m.examDate === todayStr)
+                (isAllSessions || encompassesDate(m.examDate, todayStr))
             )
         );
         
@@ -4787,6 +4819,7 @@ ANS: B`;
                                   <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => handleResultSort('class')}>Kelas {resultSort.column === 'class' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
                                   <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => handleResultSort('school')}>Sekolah {resultSort.column === 'school' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
                                   <th className="p-4 cursor-pointer hover:text-blue-600" onClick={() => handleResultSort('examTitle')}>Mapel {resultSort.column === 'examTitle' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
+                                  <th className="p-4 cursor-pointer hover:text-blue-600 text-center" onClick={() => handleResultSort('cheatingAttempts')}>Pelanggaran {resultSort.column === 'cheatingAttempts' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
                                   <th className="p-4 cursor-pointer hover:text-blue-600 text-center" onClick={() => handleResultSort('score')}>Nilai {resultSort.column === 'score' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
                                   <th className="p-4 cursor-pointer hover:text-blue-600 text-center" onClick={() => handleResultSort('submittedAt')}>Waktu Submit {resultSort.column === 'submittedAt' && (resultSort.direction === 'asc' ? '↑' : '↓')}</th>
                               </tr>
@@ -4816,7 +4849,8 @@ ANS: B`;
                                         case 'nomorPeserta': valA = stA?.nomorPeserta || stA?.username || ''; valB = stB?.nomorPeserta || stB?.username || ''; break;
                                         case 'class': valA = stA?.class || ''; valB = stB?.class || ''; break;
                                         case 'school': valA = stA?.school || ''; valB = stB?.school || ''; break;
-                                        case 'examTitle': valA = a.examTitle; valB = b.examTitle; break;
+                                        case 'examTitle': valA = exams.find(e => e.id === a.examId)?.title || a.examTitle || ''; valB = exams.find(e => e.id === b.examId)?.title || b.examTitle || ''; break;
+                                        case 'cheatingAttempts': valA = a.cheatingAttempts || 0; valB = b.cheatingAttempts || 0; break;
                                         case 'score': valA = a.score || 0; valB = b.score || 0; break;
                                         case 'submittedAt': valA = a.submittedAt ? new Date(a.submittedAt).getTime() : NaN; valB = b.submittedAt ? new Date(b.submittedAt).getTime() : NaN; break;
                                     }
@@ -4840,7 +4874,8 @@ ANS: B`;
                                         <td className="p-4 font-mono text-gray-600">{student?.nomorPeserta || student?.username || '-'}</td>
                                         <td className="p-4 text-gray-600">{student?.class || '-'}</td>
                                         <td className="p-4 text-gray-600">{student?.school || '-'}</td>
-                                        <td className="p-4 text-gray-700">{r.examTitle}</td>
+                                        <td className="p-4 text-gray-700">{exams.find(e => e.id === r.examId)?.title || r.examTitle}</td>
+                                        <td className="p-4 text-center font-bold text-red-600">{r.cheatingAttempts || 0}</td>
                                         <td className="p-4 text-center">
                                             <span className="font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">{r.score}</span>
                                         </td>
@@ -4850,7 +4885,7 @@ ANS: B`;
                                 })
                               }
                               {results.length === 0 && (
-                                  <tr><td colSpan={7} className="p-8 text-center text-gray-400 italic">Belum ada data hasil ujian.</td></tr>
+                                  <tr><td colSpan={8} className="p-8 text-center text-gray-400 italic">Belum ada data hasil ujian.</td></tr>
                               )}
                           </tbody>
                       </table>
@@ -5914,7 +5949,10 @@ ANS: B`;
                                   onChange={e => setPelanggaranSubjectFilter(e.target.value)}
                               >
                                   <option value="ALL">Semua Mata Pelajaran</option>
-                                  {Array.from(new Set(results.filter(r => r.cheatingAttempts > 0).map(r => r.examTitle).filter(Boolean))).map(title => (
+                                  {Array.from(new Set([
+                                      ...exams.map(e => e.title),
+                                      ...results.filter(r => r.cheatingAttempts > 0).map(r => r.examTitle)
+                                  ].filter(Boolean))).sort().map(title => (
                                       <option key={title} value={title}>{title}</option>
                                   ))}
                               </select>
