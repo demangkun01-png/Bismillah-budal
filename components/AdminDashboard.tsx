@@ -2446,7 +2446,8 @@ ANS: B`;
             const studentExams = exams.filter(e => {
                 const hasSchoolAccess = e.schoolAccess?.some(s => s.trim().toLowerCase() === studentSchool);
                 const hasDirectMapping = st.mappings?.some(m => m.examId === e.id);
-                return hasSchoolAccess || hasDirectMapping;
+                const hasResultRecord = results.some(r => r.studentId === st.id && r.examId === e.id);
+                return hasSchoolAccess || hasDirectMapping || hasResultRecord;
             });
             
             studentExams.forEach(exam => {
@@ -4925,7 +4926,8 @@ ANS: B`;
                                                const studentExams = exams.filter(e => {
                                                    const hasSchoolAccess = e.schoolAccess?.some(s => s.trim().toLowerCase() === studentSchool);
                                                    const hasDirectMapping = st.mappings?.some(m => m.examId === e.id);
-                                                   return hasSchoolAccess || hasDirectMapping;
+                                                   const hasResultRecord = results.some(r => r.studentId === st.id && r.examId === e.id);
+                                                   return hasSchoolAccess || hasDirectMapping || hasResultRecord;
                                                });
                                                studentExams.forEach(exam => {
                                                    if (resultExamFilter !== 'ALL' && exam.title !== resultExamFilter) return;
